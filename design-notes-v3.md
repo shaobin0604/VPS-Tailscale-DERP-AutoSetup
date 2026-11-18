@@ -133,6 +133,8 @@ menu_acl（菜单 7）自动完成上述计算与输出，用户复制即可。
 - 镜像名**全小写**（ghcr.io 要求仓库路径全小写，已用 `tr '[:upper:]' '[:lower:]'` 处理）
 - 版本号取自 tailscale/tailscale 官方 release（自动）或 workflow_dispatch 输入（手动，必须 `vX.Y.Z` 格式，v3.2.5 加严格白名单）
 - 已有版本构建检查通过 GHCR registry API（v3.2.5 修复了传 `Bearer ***` 死代码的 bug，现在用真实 token）
+- **v3.3.1 修复 fork 首构建死锁**：token 交换必须带认证（`curl -u "${ACTOR}:${GITHUB_TOKEN}" .../token?service=ghcr.io&scope=repository:<path>:pull`）。GHCR 匿名 token 端点对「包不存在」和「包私有」一律回 **403**（不泄露存在性），而 fork 首次构建时包必然还不存在，旧逻辑 `exit 1` 导致**永远建不出包**（鸡生蛋死锁）。现在：`200` 才解析 tags 比对；`401/403/404` 与拿不到 token 一律视为「首次发布」→ `should_build=true`（重复推同一版本幂等，宁可多构建也不阻塞）；tag 比对改用 `grep -qxF` 全行精确匹配（防止 `v1.104.7` 命中 `v1.104.70`）
+- **注意**：GHCR 用 `GITHUB_TOKEN` 建的包默认**私有**，首次构建成功后需在 `Packages → derper → Package settings → Change visibility` 改为 Public，否则 VPS 上 `docker pull` 会 401/403（`install.sh` 的 `ghcr_pkg_tags()` 亦同）
 
 ### 5.2 ci.yml（主 CI）
 
